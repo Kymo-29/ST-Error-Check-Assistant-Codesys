@@ -1,0 +1,87 @@
+{
+  "name": "st-error-check-assistant-codesys",
+  "displayName": "ST Error Check Assistant Codesys",
+  "description": "Validates ST IEC 61131-3 code for CODESYS with native VS Code notifications",
+  "version": "0.0.1",
+  "publisher": "MKY-SIA",
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/codesys-validator"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/codesys-validator/issues"
+  },
+  "homepage": "https://github.com/yourusername/codesys-validator/blob/master/README.md",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "CODESYS",
+    "ST",
+    "IEC 61131-3",
+    "PLC",
+    "Validation"
+  ],
+  "activationEvents": [
+    "onLanguage:st",
+    "workspaceContains:*.st"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codesys-validator.validate",
+        "title": "CODESYS: Validate ST Code"
+      },
+      {
+        "command": "codesys-validator.validateAll",
+        "title": "CODESYS: Validate All ST Files"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "codesys-validator.validate",
+        "key": "ctrl+shift+k",
+        "when": "editorLangId == st"
+      }
+    ],
+    "configuration": {
+      "title": "CODESYS Validator",
+      "properties": {
+        "codesysValidator.enableOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable validation on file save"
+        },
+        "codesysValidator.showDetailedMessages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show detailed error messages in notifications"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vsce": "^2.15.0"
+  }
+}
