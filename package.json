@@ -2,18 +2,18 @@
   "name": "st-error-check-assistant-codesys",
   "displayName": "ST Error Check Assistant Codesys",
   "description": "Validates ST IEC 61131-3 code for CODESYS with native VS Code notifications",
-  "version": "0.0.1",
-  "publisher": "MKY-SIA",
+  "version": "0.0.2",
+  "publisher": "MKYSIA",
   "icon": "icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/codesys-validator"
+    "url": "https://github.com/Kymo-29/ST-Error-Check-Assistant-Codesys"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/codesys-validator/issues"
+    "url": "https://github.com/Kymo-29/ST-Error-Check-Assistant-Codesys/issues"
   },
-  "homepage": "https://github.com/yourusername/codesys-validator/blob/master/README.md",
+  "homepage": "https://github.com/Kymo-29/ST-Error-Check-Assistant-Codesys/blob/master/README.md",
   "engines": {
     "vscode": "^1.80.0"
   },

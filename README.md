@@ -19,22 +19,12 @@ A VS Code extension for validating Structured Text (ST) IEC 61131-3 code for COD
 
 ## Commands
 
-- **CODESYS: Validate ST Code** (`Ctrl+Shift+K`)
+- **CODESYS: Validate ST Code** (`Ctrl+Shift+K` or `Ctrl+S`)
   - Validates the currently open ST file and shows results in a notification
 
 - **CODESYS: Validate All ST Files**
   - Runs validation on all `.st` files in the workspace
 
-## Configuration
-
-Add these to your VS Code `settings.json`:
-
-```json
-{
-  "codesysValidator.enableOnSave": true,           // Validate on save (default: true)
-  "codesysValidator.showDetailedMessages": true   // Show detailed error messages (default: true)
-}
-```
 
 ## Notifications Used
 
@@ -51,20 +41,7 @@ All notifications support:
 
 ## Installation
 
-1. Clone or extract this repository
-2. Run `npm install` to install dependencies
-3. Open the folder in VS Code
-4. Press `F5` to launch the extension in debug mode
-5. Package with `vsce package` to create a `.vsix` file
-
-## Development
-
-- **Compile**: `npm run compile`
-- **Watch**: `npm run watch`
-- **Test**: `npm test`
-- **Lint**: `npm run lint`
-
-## Project Structure
+- Could need to restart VSC in order to make it function properly
 
 ```
 .
