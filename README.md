@@ -1,74 +1,125 @@
-# CODESYS Validator Extension
+# ST Error Check Assistant — CODESYS
 
-A VS Code extension for validating Structured Text (ST) IEC 61131-3 code for CODESYS 3.5.18 compatibility with native VS Code notifications.
+A VS Code extension for validating Structured Text (ST / IEC 61131-3) code targeting **CODESYS 3.5.18**.
+
+Recommended workspace path: `C:\Users\kymo_\OneDrive - Lycées et centres professionnels neuchâtelois\Documents\GitHub\ST-Error-Check-Assistant-Codesys`
+
+---
 
 ## Features
 
-- **Real-time Validation**: Validates ST code on file save (configurable)
-- **Native Notifications**: Uses VS Code's native `window.showInformationMessage()`, `showWarningMessage()`, and `showErrorMessage()` APIs for user feedback
-- **Syntax Checking**: Detects common ST syntax issues including:
-  - Invalid array bounds
-  - Missing control structure keywords (THEN, DO, END_IF, etc.)
-  - Data type mismatches
-  - Variable declaration issues
-  - Invalid assignment operators (= instead of :=)
+- **Real-time diagnostics** in the Problems panel (red/yellow squiggles)
+- **On-save validation** (configurable)
+- **Batch validation** — all `.st` files in the workspace
+- **Parameter name completion** when typing `(` for Standard / Util function blocks outside `VAR` blocks
+- **Ctrl+Shift+K** shortcut to validate the active file
+- Configurable via VS Code settings
 
-- **Batch Validation**: Validate all ST files in workspace at once
-- **Detailed Messages**: Shows line numbers and specific error descriptions
-- **Configurable**: Enable/disable on-save validation and detailed messages
+---
 
 ## Commands
 
-- **CODESYS: Validate ST Code** (`Ctrl+Shift+K` or `Ctrl+S`)
-  - Validates the currently open ST file and shows results in a notification
+| Command | Shortcut | Description |
+|---|---|---|
+| `CODESYS: Validate ST Code` | `Ctrl+Shift+K` | Validate the active ST file |
+| `CODESYS: Validate All ST Files` | — | Validate all `.st` files in workspace |
 
-- **CODESYS: Validate All ST Files**
-  - Runs validation on all `.st` files in the workspace
+---
 
+## Checks Performed
 
-## Notifications Used
+### Syntax
+- Missing semicolons on assignments, function calls, and `END_*` closers
+- `=` used instead of `:=` for assignment
+- `IF` without `THEN`; `ELSE`/`ELSIF` with trailing `;`
 
-The extension uses the following VS Code Notification APIs:
+### Data types
+- `REAL`/`LREAL` literal without decimal point (`42` → should be `42.0`)
+- Variable declaration missing type annotation inside `VAR` blocks
+- `VAR CONSTANT` without initialiser (`:=`)
+- Unknown element type in `ARRAY … OF <type>`
 
-- `vscode.window.showInformationMessage()` - Success messages
-- `vscode.window.showWarningMessage()` - Issues found
-- `vscode.window.showErrorMessage()` - (reserved for critical errors)
+### Block structure
+- Unmatched block openers/closers (across the whole document)
+- Mismatched pairs (e.g. `END_WHILE` inside a `FOR` block)
 
-All notifications support:
-- **Modal option**: Can be set for more prominent alerts
-- **Detail text**: Provides additional information in modal messages
-- **Action buttons**: Users can interact with notification options
+### Loops & control flow
+- `FOR` loop missing `:=`, `TO`, or `DO`
+- `WHILE` loop missing `DO`
+- `UNTIL` missing trailing `;`
+- `CASE` missing `OF`
 
-## Installation
+### Function blocks
+- Standard and Util FB / function parameter validation based on `CODESYS_Bibliotheques.xlsx`
+- Standard FB calls missing required parameters (`IN`/`PT`, `CU`/`CD`/`PV`)
+- `PID` call missing `ACTUAL`/`SET_POINT`
+- `Util.BLINK` call missing `ENABLE`/`EN`, `TIMELOW`/`TLOW`, `TIMEHIGH`/`THIGH`, `OUT`/`Q`
+- Exact parameter type strings preserved from workbook definitions (`STRING (255)`, `INT`, `TIME`, etc.)
+- Expected parameter style and type hints for common Standard and Util FBs (`TIMELOW : TIME`, `OUT : BOOL`, `ACTUAL : REAL`, etc.)
+- `ENABLE =>` used instead of `EN`/`ENO`
 
-- Could need to restart VSC in order to make it function properly
+---
+
+## Examples of Issues Detected
+
+```st
+(* Array bounds *)
+myArray : ARRAY[5..0] OF INT;      (* ERROR: start > end *)
+
+(* REAL literal *)
+myVal : REAL := 42;                (* WARNING: should be 42.0 *)
+
+(* FOR loop *)
+FOR i = 0 TO 9 DO                  (* ERROR: use := not = *)
+FOR i := 0 TO 9                    (* WARNING: missing DO *)
+
+(* CASE *)
+CASE myVar                          (* ERROR: missing OF *)
+
+(* Constant *)
+VAR CONSTANT pi : REAL; END_VAR    (* ERROR: missing := *)
+
+(* Assignment *)
+myVar = 5;                          (* WARNING: use := *)
+
+(* Timer call *)
+myTon(Q => result);                (* WARNING: missing IN and PT *)
+
+(* Util.BLINK call *)
+myBlink(ENABLE := start, TIMELOW := T#100ms, TIMEHIGH := T#200ms, OUT => led);
+                                    (* WARNING: missing expected BLINK parameters or incorrect parameter styles *)
+
+(* Block mismatch *)
+IF cond THEN
+  ...
+END_FOR;                           (* ERROR: END_FOR closes FOR, not IF *)
+```
+
+---
+
+## Project Structure
 
 ```
 .
 ├── src/
-│   ├── extension.ts       # Main extension entry point
-│   └── validator.ts       # CODESYS ST validation logic
-├── .vscode/
-│   ├── launch.json        # Debug configuration
-│   └── tasks.json         # Build tasks
-├── package.json           # Extension metadata and dependencies
+│   ├── extension.ts       # Extension entry point
+│   └── validator.ts       # IEC 61131-3 / CODESYS validation logic
+├── package.json           # Extension manifest
 └── tsconfig.json          # TypeScript configuration
 ```
 
-## How It Works
-
-1. **Activation**: Extension activates when opening ST files or on workspace open
-2. **Validation**: Simulates CODESYS 3.5.18 compilation rules
-3. **Notifications**: Issues found are reported via VS Code native notification APIs
-4. **Options**: Modal messages show detailed error information with line numbers
-
-## Example Issues Detected
-
-- ❌ `ARRAY[5..0] OF INT` → "Array bounds invalid: start index greater than end index"
-- ❌ `IF condition DO` → "IF statement missing THEN keyword"
-- ❌ `variable = value` → "ST uses := for assignment, not ="
-- ⚠️ `value : REAL := 42` → "REAL literal should have decimal point (e.g., 42.0)"
+---
 
 ## License
 
 MIT
+
+
+## v0.0.3 improvements
+- Numeric range validation for IEC integer types (USINT, UINT, SINT, INT, DINT, etc.).
+- TIME literals now require units (ms, s, m, h, d).
+- New workbook-driven Standard/Util library validation using `CODESYS_Bibliotheques.xlsx`.
+- Parameter name completion while typing `(` outside `VAR` blocks for Standard and Util FBs.
+- Improved Function Block parameter checks with exact type text from workbook definitions.
+- Detects wrong use of => for FB inputs (expects :=).
+- icon.png and LICENSE preserved.

@@ -2,7 +2,7 @@
   "name": "st-error-check-assistant-codesys",
   "displayName": "ST Error Check Assistant Codesys",
   "description": "Validates ST IEC 61131-3 code for CODESYS with native VS Code notifications",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "MKYSIA",
   "icon": "icon.png",
   "license": "MIT",
@@ -78,10 +78,14 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.80.0",
+    "@types/xlsx": "^0.0.35",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
     "typescript": "^5.0.0",
     "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
   }
 }

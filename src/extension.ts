@@ -3,11 +3,13 @@ import { CodesysValidator } from './validator';
 
 let validator: CodesysValidator;
 let diagnosticCollection: vscode.DiagnosticCollection;
+let suggestTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('CODESYS Validator extension is now active');
 
-	validator = new CodesysValidator();
+	const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	validator = new CodesysValidator(workspaceRoot);
 	diagnosticCollection = vscode.languages.createDiagnosticCollection('codesys-validator');
 	context.subscriptions.push(diagnosticCollection);
 
@@ -32,7 +34,50 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(validateCommand, validateAllCommand, saveWatcher);
+	const suggestionWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
+		if (event.document.languageId !== 'st') { return; }
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || editor.document.uri.toString() !== event.document.uri.toString()) { return; }
+		const position = editor.selection.active;
+		if (!isPositionInFBCall(editor.document, position)) { return; }
+		if (suggestTimer) { clearTimeout(suggestTimer); }
+		suggestTimer = setTimeout(() => {
+			const currentEditor = vscode.window.activeTextEditor;
+			if (!currentEditor || currentEditor.document.uri.toString() !== event.document.uri.toString()) { return; }
+			if (isPositionInFBCall(currentEditor.document, currentEditor.selection.active)) {
+				void vscode.commands.executeCommand('editor.action.triggerSuggest');
+			}
+		}, 2000);
+	});
+
+	const completionProvider = vscode.languages.registerCompletionItemProvider('st', {
+		provideCompletionItems(document: vscode.TextDocument, position: vscode.Position) {
+			const linePrefix = document.lineAt(position.line).text.substring(0, position.character);
+			if (!/\w+(?:\.[\w\d_]+)*\s*\($/.test(linePrefix)) {
+				return null;
+			}
+			if (isPositionInVarBlock(document, position)) {
+				return null;
+			}
+
+			const match = linePrefix.match(/([\w\d_]+(?:\.[\w\d_]+)*)\s*\($/);
+			if (!match) { return null; }
+			const callName = match[1];
+			const declarations = validator.extractVariableDeclarations(document.getText());
+			const suggestions = validator.getParameterSuggestions(callName, declarations);
+			if (!suggestions.length) { return null; }
+
+			return suggestions.map(s => {
+				const item = new vscode.CompletionItem(s.label, vscode.CompletionItemKind.Property);
+				item.insertText = new vscode.SnippetString(`${s.insertText}$1`);
+				item.detail = s.detail;
+				item.documentation = `Insert ${s.label} parameter for ${callName}`;
+				return item;
+			});
+		}
+	}, '(');
+
+	context.subscriptions.push(validateCommand, validateAllCommand, saveWatcher, suggestionWatcher, completionProvider);
 
 	vscode.window.showInformationMessage('CODESYS Validator loaded. Use Ctrl+Shift+K to validate.');
 }
@@ -106,6 +151,29 @@ async function validateAllFiles(): Promise<void> {
 			{ detail, modal: false }
 		);
 	}
+}
+
+function isPositionInVarBlock(document: vscode.TextDocument, position: vscode.Position): boolean {
+	let inVarBlock = false;
+	for (let i = 0; i <= position.line; i++) {
+		const rawLine = document.lineAt(i).text;
+		const trimmed = rawLine.trim().toUpperCase();
+		if (/^VAR(_INPUT|_OUTPUT|_IN_OUT|_GLOBAL|_EXTERNAL|_TEMP|_STAT)?(\s|$)/.test(trimmed)) {
+			inVarBlock = true;
+		}
+		if (/^END_VAR(\s*;|\s*$)/.test(trimmed)) {
+			inVarBlock = false;
+		}
+	}
+	return inVarBlock;
+}
+
+function isPositionInFBCall(document: vscode.TextDocument, position: vscode.Position): boolean {
+	if (isPositionInVarBlock(document, position)) { return false; }
+	const lineText = document.lineAt(position.line).text;
+	const prefix = lineText.substring(0, position.character);
+	const callMatch = prefix.match(/([\w\d_]+(?:\.[\w\d_]+)*)\s*\([^)]*$/);
+	return !!callMatch;
 }
 
 export function deactivate() {}
