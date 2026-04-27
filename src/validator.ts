@@ -592,6 +592,7 @@ export class CodesysValidator {
 		if (!trimmed) { return; }
 
 		this.checkArraySyntax(trimmed, lineNumber);
+		this.checkArrayAccessSyntax(trimmed, lineNumber);
 		this.checkRealLiterals(trimmed, lineNumber);
 		this.checkVariableDeclarations(trimmed, lineNumber, inVarBlock, declarations);
 		this.checkLiteralRanges(trimmed, lineNumber);
@@ -607,28 +608,112 @@ export class CodesysValidator {
 	//  Individual checks
 	// ────────────────────────────────────────────────────────────
 
-	/** ARRAY[start..end] OF type — bounds and type validation */
+	private parseArrayType(typeStr: string): { baseType: string; dimensions: string[][] } | undefined {
+		let remaining = typeStr.trim();
+		const dimensions: string[][] = [];
+		const arrayRegex = /^ARRAY\s*\[([^\]]+)\]\s*OF\s*(.*)$/i;
+		while (true) {
+			const match = remaining.match(arrayRegex);
+			if (!match) {
+				return undefined;
+			}
+			const rawDims = match[1].trim();
+			const dims = rawDims.split(',').map(d => d.trim()).filter(Boolean);
+			if (!dims.length) {
+				return undefined;
+			}
+			dimensions.push(dims);
+			remaining = match[2].trim();
+			if (!/^ARRAY\s*\[/.test(remaining)) {
+				break;
+			}
+		}
+		return { baseType: remaining.toUpperCase(), dimensions };
+	}
+
+	/** ARRAY[...] OF type — bounds and type validation */
 	private checkArraySyntax(line: string, lineNumber: number): void {
-		const pattern = /ARRAY\s*\[\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*\]\s*OF\s+(\w+)/gi;
-		let m: RegExpExecArray | null;
-		while ((m = pattern.exec(line)) !== null) {
-			const start = parseInt(m[1]);
-			const end = parseInt(m[2]);
-			if (start > end) {
+		const arrayExpr = /\bARRAY\s*\[[^\]]+\]\s*OF\s*(?:ARRAY\s*\[[^\]]+\]\s*OF\s*)*[\w\d_]+/gi;
+		let match: RegExpExecArray | null;
+		while ((match = arrayExpr.exec(line)) !== null) {
+			const typeExpr = match[0];
+			const parsed = this.parseArrayType(typeExpr);
+			if (!parsed) {
+				this.addIssue(lineNumber, `Invalid ARRAY declaration syntax in '${typeExpr}'`, 'error');
+				continue;
+			}
+			const { baseType, dimensions } = parsed;
+			if (!ALL_KNOWN_TYPES.has(baseType) && baseType !== 'ARRAY') {
 				this.addIssue(lineNumber,
-					`Array bounds invalid: start index (${start}) > end index (${end})`,
+					`Array element type '${baseType}' is not a recognised IEC/CODESYS standard type — verify it is declared`,
+					'warning');
+			}
+			if (baseType === 'BIT') {
+				this.addIssue(lineNumber,
+					'Array element type BIT is invalid in CODESYS array declarations',
 					'error');
 			}
-			const elementType = m[3].toUpperCase();
-			if (!ALL_KNOWN_TYPES.has(elementType) && elementType !== 'ARRAY') {
-				this.addIssue(lineNumber,
-					`Array element type '${m[3]}' is not a recognised IEC/CODESYS standard type — verify it is declared`,
-					'warning');
+			for (const dimList of dimensions) {
+				for (const dim of dimList) {
+					const rangeMatch = dim.match(/^(-?\d+)\s*\.\.\s*(-?\d+)$/);
+					if (rangeMatch) {
+						const start = Number(rangeMatch[1]);
+						const end = Number(rangeMatch[2]);
+						if (start > end) {
+							this.addIssue(lineNumber,
+								`Array bounds invalid: start index (${start}) > end index (${end}) in '${typeExpr}'`,
+								'error');
+						}
+						if (Math.abs(start) > 2147483647 || Math.abs(end) > 2147483647) {
+							this.addIssue(lineNumber,
+								`Array index limit must fit in DINT range [-2147483648..2147483647] in '${typeExpr}'`,
+								'error');
+						}
+						continue;
+					}
+					const intMatch = dim.match(/^(-?\d+)$/);
+					if (intMatch) {
+						const value = Number(intMatch[1]);
+						if (Math.abs(value) > 2147483647) {
+							this.addIssue(lineNumber,
+								`Array index limit must fit in DINT range [-2147483648..2147483647] in '${typeExpr}'`,
+								'error');
+						}
+						continue;
+					}
+					this.addIssue(lineNumber,
+						`Array dimension '${dim}' is not valid; expected integer or range (example: 1..10)`,
+						'error');
+				}
 			}
 		}
 	}
 
 	/** REAL / LREAL literal should include a decimal point */
+	private checkArrayAccessSyntax(line: string, lineNumber: number): void {
+		const accessExpr = /([\w\d_]+(?:\.[\w\d_]+)*)\s*(?:\[[^\]]+\])+(?!\s*OF\b)/g;
+		let match: RegExpExecArray | null;
+		while ((match = accessExpr.exec(line)) !== null) {
+			const fullExpr = match[0];
+			const indexGroups = fullExpr.match(/\[[^\]]*\]/g) || [];
+			for (const rawIndex of indexGroups) {
+				const content = rawIndex.slice(1, -1).trim();
+				if (!content) {
+					this.addIssue(lineNumber, `Array access '${fullExpr}' uses an empty index expression`, 'error');
+					continue;
+				}
+				if (content.includes('..')) {
+					this.addIssue(lineNumber, `Array access '${fullExpr}' must use index expressions, not ranges`, 'error');
+					continue;
+				}
+				const indexes = content.split(',').map(i => i.trim());
+				if (indexes.some(i => i.length === 0)) {
+					this.addIssue(lineNumber, `Array access '${fullExpr}' contains an empty index segment`, 'error');
+				}
+			}
+		}
+	}
+
 	private checkRealLiterals(line: string, lineNumber: number): void {
 		const m = line.match(/:\s*(LREAL|REAL)\s*:=\s*(\d+)\b/i);
 		if (m && !m[2].includes('.')) {
@@ -645,11 +730,14 @@ export class CodesysValidator {
 		}
 
 		const trimmed = line.trim();
-		const declaration = trimmed.match(/^([\w\d_]+)\s*:\s*([A-Z0-9_]+(?:\.[A-Z0-9_]+)*(?:\s*\[.*\]\s*OF\s*[A-Z0-9_]+)?)\b/i);
+		const declaration = trimmed.match(/^([\w\d_]+)\s*:\s*((?:ARRAY\s*\[[^\]]+\]\s*OF\s*)*[A-Z0-9_]+(?:\.[A-Z0-9_]+)*)\b/i);
 		if (declaration) {
 			const varName = declaration[1].toUpperCase();
 			const varTypeRaw = declaration[2].toUpperCase().replace(/\s+/g, ' ');
-			const varType = varTypeRaw.split('.').pop() || varTypeRaw;
+			if (varTypeRaw.startsWith('ARRAY') && !this.parseArrayType(varTypeRaw)) {
+				this.addIssue(lineNumber, `Invalid ARRAY declaration syntax in '${varTypeRaw}'`, 'error');
+			}
+			const varType = varTypeRaw.startsWith('ARRAY') ? varTypeRaw : varTypeRaw.split('.').pop() || varTypeRaw;
 			if (!ALL_KNOWN_TYPES.has(varType) && !varType.startsWith('ARRAY')) {
 				this.addIssue(lineNumber,
 					`Variable '${declaration[1]}' uses unknown or unsupported type '${declaration[2]}'. Use a CODESYS IEC type or declare it before use.`,
@@ -862,25 +950,6 @@ export class CodesysValidator {
 			const outputNames = this.flattenParamGroups(rule.requiredOutputs);
 			const allowedParams = new Set(Object.keys(rule.typeHints || {}));
 
-			if (rule.requiredInputs) {
-				for (const group of inputGroups) {
-					if (!group.some(name => seen[name])) {
-						this.addIssue(lineNumber,
-							`${ruleName}: missing required input parameter ${group.join(' / ')}`,
-							'error');
-					}
-				}
-			}
-			if (rule.requiredOutputs) {
-				for (const name of outputNames) {
-					if (!seen[name]) {
-						this.addIssue(lineNumber,
-							`${ruleName}: missing required output parameter ${name}`,
-							'error');
-					}
-				}
-			}
-
 			for (const key of Object.keys(seen)) {
 				if (!allowedParams.has(key)) {
 					this.addIssue(lineNumber, `${ruleName}: unknown parameter '${key}'`, 'error');
@@ -920,7 +989,9 @@ export class CodesysValidator {
 
 	private isTypeCompatible(expectedType: string, actualType: string): boolean {
 		const expectedBase = expectedType.toUpperCase().split(/\s|\(/)[0];
-		return actualType.toUpperCase() === expectedType.toUpperCase() || actualType.toUpperCase() === expectedBase;
+		const actualUpper = actualType.toUpperCase();
+		return actualUpper === expectedType.toUpperCase() || actualUpper === expectedBase ||
+			(expectedBase === 'ARRAY' && actualUpper.startsWith('ARRAY['));
 	}
 
 	public getParameterSuggestions(callName: string, declarations: Record<string,string>): CompletionParameter[] {
@@ -971,7 +1042,7 @@ export class CodesysValidator {
 					const afterClose = rawLine.substring(rawLine.indexOf('*)') + 2);
 					const cleaned = removeComments(removeStringLiterals(afterClose));
 					if (cleaned.trim()) {
-						const match = cleaned.trim().match(/^([\w\d_]+)\s*:\s*([A-Z0-9_]+(?:\.[A-Z0-9_]+)*(?:\s*\[.*\]\s*OF\s*[A-Z0-9_]+)?)\b/i);
+						const match = cleaned.trim().match(/^([\w\d_]+)\s*:\s*((?:ARRAY\s*\[[^\]]+\]\s*OF\s*)*[A-Z0-9_]+(?:\.[A-Z0-9_]+)*)\b/i);
 						if (match) {
 							declarations[match[1].toUpperCase()] = match[2].toUpperCase().replace(/\s+/g, ' ');
 						}
@@ -984,7 +1055,7 @@ export class CodesysValidator {
 				const beforeComment = rawLine.substring(0, rawLine.indexOf('(*'));
 				const cleaned = removeComments(removeStringLiterals(beforeComment));
 				if (cleaned.trim()) {
-					const match = cleaned.trim().match(/^([\w\d_]+)\s*:\s*([A-Z0-9_]+(?:\.[A-Z0-9_]+)*(?:\s*\[.*\]\s*OF\s*[A-Z0-9_]+)?)\b/i);
+					const match = cleaned.trim().match(/^([\w\d_]+)\s*:\s*((?:ARRAY\s*\[[^\]]+\]\s*OF\s*)*[A-Z0-9_]+(?:\.[A-Z0-9_]+)*)\b/i);
 					if (match) {
 						declarations[match[1].toUpperCase()] = match[2].toUpperCase().replace(/\s+/g, ' ');
 					}
@@ -994,7 +1065,7 @@ export class CodesysValidator {
 
 			const cleaned = removeComments(removeStringLiterals(rawLine));
 			if (!cleaned.trim()) { continue; }
-			const match = cleaned.trim().match(/^([\w\d_]+)\s*:\s*([A-Z0-9_]+(?:\.[A-Z0-9_]+)*(?:\s*\[.*\]\s*OF\s*[A-Z0-9_]+)?)\b/i);
+			const match = cleaned.trim().match(/^([\w\d_]+)\s*:\s*((?:ARRAY\s*\[[^\]]+\]\s*OF\s*)*[A-Z0-9_]+(?:\.[A-Z0-9_]+)*)\b/i);
 			if (match) {
 				declarations[match[1].toUpperCase()] = match[2].toUpperCase().replace(/\s+/g, ' ');
 			}

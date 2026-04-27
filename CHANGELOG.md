@@ -1,4 +1,9 @@
 # Changelog
+## [0.0.5] — 2026-04-27
+
+### Added
+- **ARRAY data type** support with one-dimensional, multi-dimensional, and nested array declarations
+
 
 ## [0.0.4] — 2026-04-27
 
