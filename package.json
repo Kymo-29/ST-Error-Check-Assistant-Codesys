@@ -2,7 +2,7 @@
   "name": "st-error-check-assistant-codesys",
   "displayName": "ST Error Check Assistant Codesys",
   "description": "Validates ST IEC 61131-3 code for CODESYS with native VS Code notifications",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "MKYSIA",
   "icon": "icon.png",
   "license": "MIT",

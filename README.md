@@ -2,8 +2,6 @@
 
 A VS Code extension for validating Structured Text (ST / IEC 61131-3) code targeting **CODESYS 3.5.18**.
 
-Recommended workspace path: `C:\Users\kymo_\OneDrive - Lycées et centres professionnels neuchâtelois\Documents\GitHub\ST-Error-Check-Assistant-Codesys`
-
 ---
 
 ## Features
@@ -50,7 +48,7 @@ Recommended workspace path: `C:\Users\kymo_\OneDrive - Lycées et centres profes
 - `CASE` missing `OF`
 
 ### Function blocks
-- Standard and Util FB / function parameter validation based on `CODESYS_Bibliotheques.xlsx`
+- Standard and Util FB / function parameter validation
 - Standard FB calls missing required parameters (`IN`/`PT`, `CU`/`CD`/`PV`)
 - `PID` call missing `ACTUAL`/`SET_POINT`
 - `Util.BLINK` call missing `ENABLE`/`EN`, `TIMELOW`/`TLOW`, `TIMEHIGH`/`THIGH`, `OUT`/`Q`
@@ -118,8 +116,7 @@ MIT
 ## v0.0.3 improvements
 - Numeric range validation for IEC integer types (USINT, UINT, SINT, INT, DINT, etc.).
 - TIME literals now require units (ms, s, m, h, d).
-- New workbook-driven Standard/Util library validation using `CODESYS_Bibliotheques.xlsx`.
+- New workbook-driven Standard/Util library validation.
 - Parameter name completion while typing `(` outside `VAR` blocks for Standard and Util FBs.
 - Improved Function Block parameter checks with exact type text from workbook definitions.
 - Detects wrong use of => for FB inputs (expects :=).
-- icon.png and LICENSE preserved.

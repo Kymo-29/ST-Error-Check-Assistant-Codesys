@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4] — 2026-04-27
+
+### Modified
+- **Small modifications of project informations** which were incorrect
+- **No code change** between V0.0.3 and V0.0.4
+
+
 ## [0.0.3] — 2026-04-27
 
 ### Added
